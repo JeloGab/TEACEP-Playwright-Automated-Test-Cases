@@ -1,0 +1,23 @@
+node_modules/
+
+# Secrets
+.env
+.env.local
+
+# Cached logged-in sessions (contain real tokens)
+.auth/
+
+# Compiled scripts/ output
+.tmp/
+
+# Test output
+reports/
+screenshots/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db

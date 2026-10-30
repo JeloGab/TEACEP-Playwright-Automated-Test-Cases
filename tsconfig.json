@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "strict": true,
+    "noUnusedLocals": true,
+    // Off on purpose. A Playwright fixture is requested by naming it in the
+    // destructuring pattern — `async ({ page, loggedInPrincipal })` — and the
+    // test body never reads it, so this rule flags every signed-in test.
+    "noUnusedParameters": false,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true
+  },
+  "include": ["tests", "pages", "fixtures", "config", "playwright.config.ts"],
+  "exclude": ["node_modules", "reports", "screenshots"]
+}
