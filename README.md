@@ -1,27 +1,223 @@
 # TEACEP — Blueshirt test case automation
 
-Playwright end-to-end tests for the Blueshirt Survey System, built from
-`Test Cases_Blueshirt_Functional.xlsx`.
+Automated end-to-end tests for the **Blueshirt Survey System**, written in
+[Playwright](https://playwright.dev) and TypeScript.
 
-## Running it
+The Blueshirt Survey System is a web app where an organisation's staff —
+Org Admins, Division Officers, District Supervisors, Principals, Coaches and
+Master Teachers — build surveys, send them to an audience, and read the
+results. The test cases for it were written by hand in an Excel workbook, one
+row per case, each row carrying an ID like `TCP - CRT - 004`, the role it
+applies to, the steps to follow and the expected output.
 
-```powershell
-npm test                                         # everything
-npx playwright test tests/principal.spec.ts      # one role
-npx playwright test tests/principal.spec.ts --headed   # watch it
-npx playwright test --grep "LGN - 004"           # one case, by its workbook ID
-npm run report                                   # the HTML report from the last run
-```
-
-Every test is titled with its Test Case ID, so `--grep` takes any ID from the
-sheet and a line in the report reads like a row in it:
+This repo turns the rows marked **Automation** into code that runs in a
+browser. Every test is titled with its Test Case ID, so a line in the test
+report reads like a row in the sheet:
 
 ```
 TCP - CRT - 004 · Principal · Create a Survey
 ```
 
-First time only: `npm install` and `npx playwright install chromium`, then
-copy `.env.example` to `.env` and fill in what you have.
+That means you can take any ID from the workbook, search this repo for it, and
+find the code that checks it — or run it on its own.
+
+> **📗 The Excel sheet that contains the test cases is with your team leader.**
+>
+> It is not in this repo, and it must not be committed here. Ask for
+> `Test Cases_Blueshirt_Functional.xlsx` before you write anything new — the
+> IDs, the roles and the expected outputs all come from it.
+
+---
+
+## Setting this up on a new computer
+
+Everything below is a fresh machine, start to finish. Should take about ten
+minutes, most of it downloading.
+
+### 1. Install Node.js
+
+Get the **LTS** build from [nodejs.org](https://nodejs.org). This repo was
+built on Node v22 and npm 10. Check it worked:
+
+```powershell
+node -v
+npm -v
+```
+
+### 2. Clone the repo
+
+```powershell
+cd ~\Documents
+git clone https://github.com/JeloGab/TEACEP--Playwright-Automated-Test-Cases.git
+cd "TEACEP--Playwright-Automated-Test-Cases"
+```
+
+### 3. Install the dependencies and the browser
+
+```powershell
+npm install
+npx playwright install chromium
+```
+
+The second command downloads the browser Playwright drives. It is separate
+from `npm install` and it is easy to forget — if your first run dies with
+"Executable doesn't exist", this is why.
+
+### 4. Make your `.env`
+
+```powershell
+cp .env.example .env
+```
+
+Then open `.env` and fill in the accounts you were given. It looks like this:
+
+```ini
+DEV_BASE_URL=https://organization.dev.blueshirt.work
+
+E2E_DEV_PRINCIPAL_EMAIL=someone@yopmail.com
+E2E_DEV_PRINCIPAL_PASSWORD=...
+E2E_DEV_COACH_EMAIL=
+E2E_DEV_COACH_PASSWORD=
+```
+
+**You do not need every account to start.** A role whose two keys are blank
+simply skips its tests, with a message naming the exact keys to fill in. Fill
+them in one role at a time and the suite grows with you.
+
+> ⚠️ **`.env` holds real passwords and is gitignored. Never commit it.**
+> `.env.example` is the one that gets committed, and it must stay empty of
+> real values. Ask your team leader for the test accounts — do not use a
+> real person's login.
+
+### 5. Prove it works
+
+```powershell
+npm test
+```
+
+You should see something close to this. Skips are normal — they are the
+accounts you have not filled in yet:
+
+```
+43 tests · 33 passed · 10 skipped · 0 failed      (~46s)
+```
+
+If everything fails instead, work through [Troubleshooting](#troubleshooting)
+at the bottom.
+
+---
+
+## Running the tests
+
+```powershell
+npm test                                           # everything
+npx playwright test tests/principal.spec.ts        # one role
+npx playwright test tests/principal.spec.ts --headed    # watch it in a real browser
+npx playwright test --grep "CRT - 004"             # one case, by its workbook ID
+npx playwright test --grep "Coach"                 # everything for one role
+npm run report                                     # open the report from the last run
+```
+
+Flags combine — path, `--headed`, `--grep` are independent of each other.
+
+Two that help while you are fixing something:
+
+```powershell
+npx playwright test tests/coach.spec.ts --headed --workers=1   # one at a time, in order
+npx playwright test tests/coach.spec.ts --debug                # step through it
+```
+
+`--debug` opens Playwright Inspector paused on the first line, and highlights
+each locator in the page as it runs. It is the fastest way to find out why a
+selector is not matching.
+
+---
+
+## Adding your own test cases
+
+The workflow, start to finish.
+
+### 1. Find the row in the workbook
+
+Get the sheet from your team leader. Note three things: the **Test Case ID**,
+the **role** in the User column, and the **Mode of Testing**.
+
+**If it says `Manual`, stop — it does not belong here.** This repo only holds
+cases marked `Automation`. See [Scope](#scope).
+
+### 2. Open that role's file
+
+`tests/` is one file per role. A Principal case goes in
+`tests/principal.spec.ts`, a Coach case in `tests/coach.spec.ts`. Cases whose
+User column says "Any User" go in `tests/signed-out.spec.ts`.
+
+### 3. Write the test
+
+Copy the shape of the ones already there:
+
+```ts
+test('TCP - CRT - 004 · Principal · Create a Survey', async ({ page, loggedInPrincipal }) => {
+  const surveyPage = new SurveyPage(page);
+  const title = unique('Survey');
+
+  // --- ACT ---
+  await surveyPage.createPublishedSurvey(title);
+
+  // --- ASSERT: the expected output from the sheet ---
+  await surveyPage.openTab('Active');
+  await expect(surveyPage.row(title)).toBeVisible();
+});
+```
+
+Three rules that keep this from rotting:
+
+1. **The title is the Test Case ID, verbatim.** `ID · Role · Case name`. This
+   is what makes the report traceable back to the sheet.
+2. **No selectors in the test.** If you need an element the page object does
+   not expose, add it to the class in `pages/` and use it by name. A test
+   should read like the steps column of the sheet.
+3. **Give anything you create a unique name** with `unique('Survey')`. Tests
+   run in parallel; two of them fighting over the same row is a flaky suite.
+
+### 4. Need a screen that has no page object?
+
+Add one in `pages/`, named `<screen>.page.ts`. Locators go in the constructor,
+actions go underneath:
+
+```ts
+export class ReportPage {
+  readonly page: Page;
+  readonly heading: Locator;
+  readonly exportButton: Locator;
+
+  constructor(page: Page) {
+    this.page = page;
+    this.heading = page.getByRole('heading', { name: 'Reports' });
+    this.exportButton = page.getByRole('button', { name: 'Export' });
+  }
+
+  async goto() {
+    await this.page.goto('/organisation/reports');
+    await expect(this.heading).toBeVisible();
+  }
+}
+```
+
+**Read the locators off the running app, do not guess them.** `npm run codegen`
+opens a browser that writes selectors as you click. Guessed selectors are the
+single biggest source of wasted time in this repo — most of the page objects
+here were wrong on the first attempt and had to be rebuilt against the live
+site.
+
+### 5. Check it
+
+```powershell
+npm run typecheck                                  # catches typos before a browser opens
+npx playwright test --grep "CRT - 004" --headed    # watch your new test
+npm test                                           # make sure nothing else broke
+```
+
+---
 
 ## What every folder does
 
@@ -96,6 +292,8 @@ Each test logs in for itself — no cached sessions, no setup project. A role
 whose `.env` keys are blank **skips** with a message naming the exact keys. A
 skip is a missing precondition, never a failure; only red counts as broken.
 
+---
+
 ## Scope
 
 Only the cases whose "Mode of Testing" column says `Automation`. Cases marked
@@ -139,7 +337,8 @@ working account through the environment, which turned all of them green.
 
 ## Things worth knowing about the app
 
-Found by probing dev, and all of it contradicts something the workbook implied:
+Found by probing dev, and all of it contradicts something the workbook implied.
+Read this before you spend an hour on a selector that cannot work:
 
 - **Routes are namespaced under `/organisation`**: `/organisation/surveys`,
   `/organisation/surveys/create`, `/organisation/configure-run`,
@@ -175,3 +374,19 @@ Found by probing dev, and all of it contradicts something the workbook implied:
   so tests run in parallel and in any order without fighting over a row.
 - A missing precondition is a skip with a reason, never a silent pass and never
   a red failure.
+
+## Troubleshooting
+
+| What you see | What it means |
+| --- | --- |
+| `Executable doesn't exist at …chromium` | You skipped `npx playwright install chromium`. |
+| `No base URL. Set DEV_BASE_URL in .env` | No `.env`, or the line is missing. Copy `.env.example` again. |
+| Everything skips | `.env` has no accounts in it. That is the expected first run. |
+| `No credentials for Coach. Set E2E_DEV_COACH_EMAIL …` | Exactly what it says — that role's two keys are blank. |
+| A test times out waiting for a locator | The selector is wrong, or the page changed. Open the trace: `npx playwright show-trace test-results/<folder>/trace.zip`. |
+| `strict mode violation: resolved to 2 elements` | Your locator matches more than one thing. Narrow it, or add `.first()` when that is genuinely right. |
+| Tests pass alone but fail together | Two tests are sharing a record. Make sure each one creates its own with `unique()`. |
+
+Every failure leaves a trace, a screenshot and a video under `test-results/`.
+The trace is the useful one — it is a frame-by-frame replay with the DOM at
+each step.
